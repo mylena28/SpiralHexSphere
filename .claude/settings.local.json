@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gfortran *)",
+      "Bash(./spiral_hex_sphere *)"
+    ]
+  }
+}
