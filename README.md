@@ -1,6 +1,6 @@
 # SpiralHexSphere
 
-A Fortran 90 mesh generator for a helical tubular surface capped with two hemispherical ends. The geometry follows the **Zinchenko parametric helix** construction and produces a triangulated surface mesh suitable for boundary element method (BEM) and other microhydrodynamics simulations.
+A Fortran 90 mesh generator for a helical tubular surface capped with two hemispherical ends. The geometry follows the Zinchenko 1997 construction and produces a triangulated surface mesh forming a spiral with caps at the end.
 
 ---
 
@@ -151,4 +151,4 @@ Each cap is built as a series of latitude rings whose radius shrinks from `tube_
 
 ## License
 
-This code was developed for doctoral research in microhydrodynamics at Villanova University. Please contact the author before reuse or redistribution.
+Please contact the author before reuse or redistribution.
