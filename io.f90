@@ -15,9 +15,9 @@ contains
     ! This format is identical to what Spiral/io.f90 and Sphere/write_mesh.f
     ! produce, so plot_mesh.py can read it directly.
     ! ──────────────────────────────────────────────────────────────────────────
-    subroutine write_mesh(filename, total_nv, total_nf, nv_spiral, verts, faces)
+    subroutine write_mesh(filename, total_nv, total_nf, nv_spiral, pts_per_ring, verts, faces)
         character(len=*), intent(in) :: filename
-        integer,  intent(in) :: total_nv, total_nf, nv_spiral
+        integer,  intent(in) :: total_nv, total_nf, nv_spiral, pts_per_ring
         real(dp), intent(in) :: verts(3, total_nv)
         integer,  intent(in) :: faces(3, total_nf)
 
@@ -25,8 +25,8 @@ contains
 
         open(newunit=iunit, file=filename, status='replace', action='write')
 
-        ! Header: vertex count, face count, and index where the hemisphere starts
-        write(iunit, '(3(I10,1X))') total_nv, total_nf, nv_spiral
+        ! Header: vertex count, face count, spiral vertex count, pts per ring
+        write(iunit, '(4(I10,1X))') total_nv, total_nf, nv_spiral, pts_per_ring
 
         ! Vertices
         do i = 1, total_nv
