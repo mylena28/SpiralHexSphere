@@ -21,7 +21,7 @@ contains
         real(dp) :: omega, norm_v
         real(dp) :: s_frac, t_param, rot_off, angle
         real(dp) :: vec_P(3), vec_T(3), vec_N(3), vec_B(3)
-        real(dp) :: d_vec(3), sq2inv = 0.0_dp
+        real(dp) :: d_vec(3)
 
         real(dp) :: vec_P_first(3) = 0.0_dp, vec_T_first(3) = 0.0_dp
         real(dp) :: vec_N_first(3) = 0.0_dp, vec_B_first(3) = 0.0_dp
