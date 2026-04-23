@@ -27,7 +27,7 @@ module params
     integer :: n_hemi = 0          ! (unused — cap uses icosahedral subdivision)
 
     !  Mesh refinement level (0 = base mesh; each level splits every triangle into 4)
-    integer :: refine_level = 1
+    integer :: refine_level = 3
 
     !  Output file
     character(len=256) :: outfile = 'spiral_hex_sphere.dat'

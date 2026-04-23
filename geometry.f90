@@ -4,10 +4,12 @@ module geometry
 
 contains
 
-    subroutine generate_full_mesh(total_nv, total_nf, nv_spiral, verts, faces)
+    subroutine generate_full_mesh(total_nv, total_nf, nv_spiral, verts, faces, s_frac, cap_flag)
         integer,  intent(out) :: total_nv, total_nf, nv_spiral
         real(dp), allocatable, intent(out) :: verts(:,:)   ! (3, total_nv)
         integer,  allocatable, intent(out) :: faces(:,:)   ! (3, total_nf)
+        real(dp), allocatable, intent(out) :: s_frac(:)    ! helix arc parameter per vertex (0..1)
+        integer,  allocatable, intent(out) :: cap_flag(:)  ! 0=tube, -1=start cap, +1=end cap
 
         integer  :: total_rings, pts_per_ring
         integer  :: nv_hemi, nf_spiral, nf_hemi
@@ -19,7 +21,7 @@ contains
 
         ! Frenet frame
         real(dp) :: omega, norm_v
-        real(dp) :: s_frac, t_param, rot_off, angle
+        real(dp) :: s_param, t_param, rot_off, angle
         real(dp) :: vec_P(3), vec_T(3), vec_N(3), vec_B(3)
         real(dp) :: d_vec(3)
 
@@ -49,6 +51,8 @@ contains
 
         allocate(verts(3, total_nv))
         allocate(faces(3, total_nf))
+        allocate(s_frac(total_nv))
+        allocate(cap_flag(total_nv))
 
         ! Optimal elevation for minimum edge-length range on the cap hemisphere.
         ! Derived from L2 = L4  =>  sin(phi) = (sqrt(7)-1)/3  ≈ 0.5486
@@ -62,11 +66,11 @@ contains
         ! PART 1 — SPIRAL VERTICES
         ! ════════════════════════════════════════════════════════════════════
         do i = 1, total_rings
-            s_frac  = real(i - 1, dp) / real(total_rings - 1, dp)
-            t_param = 2.0_dp * PI * n_turns * s_frac
+            s_param = real(i - 1, dp) / real(total_rings - 1, dp)
+            t_param = 2.0_dp * PI * n_turns * s_param
             rot_off = real(i - 1, dp) * (PI / real(pts_per_ring, dp))
 
-            vec_P = [ helix_R * cos(t_param), helix_R * sin(t_param), helix_h * s_frac ]
+            vec_P = [ helix_R * cos(t_param), helix_R * sin(t_param), helix_h * s_param ]
             vec_N = [ -cos(t_param), -sin(t_param), 0.0_dp ]
             vec_T(1) = -helix_R * omega * sin(t_param) / norm_v
             vec_T(2) =  helix_R * omega * cos(t_param) / norm_v
@@ -81,6 +85,8 @@ contains
                 verts(1, idx) = vec_P(1) + tube_r*(vec_N(1)*cos(angle) + vec_B(1)*sin(angle))
                 verts(2, idx) = vec_P(2) + tube_r*(vec_N(2)*cos(angle) + vec_B(2)*sin(angle))
                 verts(3, idx) = vec_P(3) + tube_r*(vec_N(3)*cos(angle) + vec_B(3)*sin(angle))
+                s_frac(idx)   = s_param
+                cap_flag(idx) = 0
             end do
 
             if (i == 1) then
@@ -107,7 +113,9 @@ contains
             d_vec = vec_N_first * cos(angle) + vec_B_first * sin(angle)
             idx   = nv_spiral + k + 1
             ! Projeção: Componente Radial (sinp) e Componente Axial (cosp)
-            verts(:, idx) = vec_P_first + tube_r * (sinp * d_vec - cosp * vec_T_first)
+            verts(:, idx)    = vec_P_first + tube_r * (sinp * d_vec - cosp * vec_T_first)
+            s_frac(idx)      = 0.0_dp
+            cap_flag(idx)    = -1
         end do
 
         ! --- END CAP (Elevated toward +T_last) ---
@@ -122,7 +130,9 @@ contains
             d_vec = vec_N_last * cos(angle) + vec_B_last * sin(angle)
             idx   = nv_spiral + 3 + k + 1
             ! Agora usa sinp e cosp corretamente para evitar o achatamento
-            verts(:, idx) = vec_P_last + tube_r * (sinp * d_vec + cosp * vec_T_last)
+            verts(:, idx)    = vec_P_last + tube_r * (sinp * d_vec + cosp * vec_T_last)
+            s_frac(idx)      = 1.0_dp
+            cap_flag(idx)    = 1
         end do
 
         ! ════════════════════════════════════════════════════════════════════
@@ -194,17 +204,30 @@ contains
     ! consecutive indices, preserving the nv_spiral boundary for plot_mesh.py.
     ! ════════════════════════════════════════════════════════════════════════
     subroutine subdivide_mesh(nv_in, nf_in, nv_sp_in, verts_in, faces_in, &
-                              nv_out, nf_out, nv_sp_out, verts_out, faces_out)
+                              s_frac_in, cap_flag_in, &
+                              nv_out, nf_out, nv_sp_out, verts_out, faces_out, &
+                              s_frac_out, cap_flag_out)
         integer,  intent(in)  :: nv_in, nf_in, nv_sp_in
         real(dp), intent(in)  :: verts_in(3, nv_in)
         integer,  intent(in)  :: faces_in(3, nf_in)
+        real(dp), intent(in)  :: s_frac_in(nv_in)
+        integer,  intent(in)  :: cap_flag_in(nv_in)
         integer,  intent(out) :: nv_out, nf_out, nv_sp_out
         real(dp), allocatable, intent(out) :: verts_out(:,:)
         integer,  allocatable, intent(out) :: faces_out(:,:)
+        real(dp), allocatable, intent(out) :: s_frac_out(:)
+        integer,  allocatable, intent(out) :: cap_flag_out(:)
 
         integer :: max_edges, n_edges, n_sp_edges, e, f, iout
         integer :: v1, v2, v3, m12, m23, m31
         integer, allocatable :: ev1(:), ev2(:), emid(:)
+
+        ! Surface projection variables
+        real(dp) :: omega, norm_v
+        real(dp) :: chord_mid(3), s_mid, d_vec(3), d_NB(3), d_norm
+        real(dp) :: t_param, vec_P(3), vec_T(3), vec_N(3), vec_B(3)
+        real(dp) :: vec_P_first(3), vec_P_last(3)
+        integer  :: v1e, v2e, flag1, flag2
 
         max_edges = 3 * nf_in
         allocate(ev1(max_edges), ev2(max_edges), emid(max_edges))
@@ -239,13 +262,65 @@ contains
 
         allocate(verts_out(3, nv_out))
         allocate(faces_out(3, nf_out))
+        allocate(s_frac_out(nv_out))
+        allocate(cap_flag_out(nv_out))
 
         ! Keep all original vertices in place
         verts_out(:, 1:nv_in) = verts_in
+        s_frac_out(1:nv_in)   = s_frac_in
+        cap_flag_out(1:nv_in) = cap_flag_in
 
-        ! New midpoint vertices: straight-line midpoints of each edge
+        ! Helix constants for tube circle projection
+        omega  = 2.0_dp * PI * n_turns / helix_h
+        norm_v = sqrt((helix_R * omega)**2 + 1.0_dp)
+        vec_P_first = [helix_R, 0.0_dp, 0.0_dp]
+        vec_P_last  = [helix_R*cos(2.0_dp*PI*n_turns), &
+                       helix_R*sin(2.0_dp*PI*n_turns), helix_h]
+
+        ! New midpoint vertices: projected onto the correct curved surface
         do e = 1, n_edges
-            verts_out(:, nv_in+e) = 0.5_dp * (verts_in(:, ev1(e)) + verts_in(:, ev2(e)))
+            v1e  = ev1(e);  v2e  = ev2(e)
+            s_mid     = 0.5_dp * (s_frac_in(v1e) + s_frac_in(v2e))
+            chord_mid = 0.5_dp * (verts_in(:, v1e) + verts_in(:, v2e))
+            flag1 = cap_flag_in(v1e);  flag2 = cap_flag_in(v2e)
+            s_frac_out(nv_in + e) = s_mid
+
+            if (flag1 == 1 .or. flag2 == 1) then
+                ! End cap: project onto sphere of radius tube_r centred at vec_P_last
+                cap_flag_out(nv_in + e) = 1
+                d_vec  = chord_mid - vec_P_last
+                d_norm = sqrt(d_vec(1)**2 + d_vec(2)**2 + d_vec(3)**2)
+                verts_out(:, nv_in+e) = vec_P_last + tube_r * d_vec / d_norm
+
+            else if (flag1 == -1 .or. flag2 == -1) then
+                ! Start cap: project onto sphere of radius tube_r centred at vec_P_first
+                cap_flag_out(nv_in + e) = -1
+                d_vec  = chord_mid - vec_P_first
+                d_norm = sqrt(d_vec(1)**2 + d_vec(2)**2 + d_vec(3)**2)
+                verts_out(:, nv_in+e) = vec_P_first + tube_r * d_vec / d_norm
+
+            else
+                ! Tube body: project onto the cross-section circle at s_mid.
+                ! Remove the tangent component of (chord_mid - vec_P), then
+                ! normalise in the N-B plane and scale by tube_r.
+                cap_flag_out(nv_in + e) = 0
+                t_param = 2.0_dp * PI * n_turns * s_mid
+                vec_P = [helix_R*cos(t_param), helix_R*sin(t_param), helix_h*s_mid]
+                vec_N = [-cos(t_param), -sin(t_param), 0.0_dp]
+                vec_T(1) = -helix_R * omega * sin(t_param) / norm_v
+                vec_T(2) =  helix_R * omega * cos(t_param) / norm_v
+                vec_T(3) =  1.0_dp / norm_v
+                vec_B(1) = vec_T(2)*vec_N(3) - vec_T(3)*vec_N(2)
+                vec_B(2) = vec_T(3)*vec_N(1) - vec_T(1)*vec_N(3)
+                vec_B(3) = vec_T(1)*vec_N(2) - vec_T(2)*vec_N(1)
+                d_vec = chord_mid - vec_P
+                d_norm = d_vec(1)*vec_T(1) + d_vec(2)*vec_T(2) + d_vec(3)*vec_T(3)
+                d_NB(1) = d_vec(1) - d_norm * vec_T(1)
+                d_NB(2) = d_vec(2) - d_norm * vec_T(2)
+                d_NB(3) = d_vec(3) - d_norm * vec_T(3)
+                d_norm = sqrt(d_NB(1)**2 + d_NB(2)**2 + d_NB(3)**2)
+                verts_out(:, nv_in+e) = vec_P + tube_r * d_NB / d_norm
+            end if
         end do
 
         ! Build 4 child triangles per parent
