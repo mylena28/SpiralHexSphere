@@ -179,4 +179,117 @@ contains
 
     end subroutine generate_full_mesh
 
+    ! ════════════════════════════════════════════════════════════════════════
+    ! SUBDIVIDE_MESH — 4-1 midpoint subdivision (one level)
+    !
+    ! Each triangle is split into 4 by inserting the midpoint of every edge:
+    !
+    !        v1                v1
+    !       /  \              / \
+    !      /    \    →    m31 --- m12
+    !     /      \          / \ / \
+    !    v3------v2        v3-m23--v2
+    !
+    ! Intra-spiral edges are inserted first so new spiral midpoints keep
+    ! consecutive indices, preserving the nv_spiral boundary for plot_mesh.py.
+    ! ════════════════════════════════════════════════════════════════════════
+    subroutine subdivide_mesh(nv_in, nf_in, nv_sp_in, verts_in, faces_in, &
+                              nv_out, nf_out, nv_sp_out, verts_out, faces_out)
+        integer,  intent(in)  :: nv_in, nf_in, nv_sp_in
+        real(dp), intent(in)  :: verts_in(3, nv_in)
+        integer,  intent(in)  :: faces_in(3, nf_in)
+        integer,  intent(out) :: nv_out, nf_out, nv_sp_out
+        real(dp), allocatable, intent(out) :: verts_out(:,:)
+        integer,  allocatable, intent(out) :: faces_out(:,:)
+
+        integer :: max_edges, n_edges, n_sp_edges, e, f, iout
+        integer :: v1, v2, v3, m12, m23, m31
+        integer, allocatable :: ev1(:), ev2(:), emid(:)
+
+        max_edges = 3 * nf_in
+        allocate(ev1(max_edges), ev2(max_edges), emid(max_edges))
+        n_edges = 0
+
+        ! Phase 1: intra-spiral edges (both endpoints inside spiral region)
+        do f = 1, nf_in
+            v1 = faces_in(1,f);  v2 = faces_in(2,f);  v3 = faces_in(3,f)
+            if (v1 <= nv_sp_in .and. v2 <= nv_sp_in) &
+                call add_edge(ev1, ev2, emid, n_edges, nv_in, v1, v2)
+            if (v2 <= nv_sp_in .and. v3 <= nv_sp_in) &
+                call add_edge(ev1, ev2, emid, n_edges, nv_in, v2, v3)
+            if (v3 <= nv_sp_in .and. v1 <= nv_sp_in) &
+                call add_edge(ev1, ev2, emid, n_edges, nv_in, v3, v1)
+        end do
+        n_sp_edges = n_edges   ! midpoints of these edges stay in the spiral region
+
+        ! Phase 2: boundary and intra-cap edges
+        do f = 1, nf_in
+            v1 = faces_in(1,f);  v2 = faces_in(2,f);  v3 = faces_in(3,f)
+            if (.not. (v1 <= nv_sp_in .and. v2 <= nv_sp_in)) &
+                call add_edge(ev1, ev2, emid, n_edges, nv_in, v1, v2)
+            if (.not. (v2 <= nv_sp_in .and. v3 <= nv_sp_in)) &
+                call add_edge(ev1, ev2, emid, n_edges, nv_in, v2, v3)
+            if (.not. (v3 <= nv_sp_in .and. v1 <= nv_sp_in)) &
+                call add_edge(ev1, ev2, emid, n_edges, nv_in, v3, v1)
+        end do
+
+        nv_sp_out = nv_sp_in + n_sp_edges
+        nv_out    = nv_in    + n_edges
+        nf_out    = 4 * nf_in
+
+        allocate(verts_out(3, nv_out))
+        allocate(faces_out(3, nf_out))
+
+        ! Keep all original vertices in place
+        verts_out(:, 1:nv_in) = verts_in
+
+        ! New midpoint vertices: straight-line midpoints of each edge
+        do e = 1, n_edges
+            verts_out(:, nv_in+e) = 0.5_dp * (verts_in(:, ev1(e)) + verts_in(:, ev2(e)))
+        end do
+
+        ! Build 4 child triangles per parent
+        iout = 0
+        do f = 1, nf_in
+            v1 = faces_in(1,f);  v2 = faces_in(2,f);  v3 = faces_in(3,f)
+            call find_edge(ev1, ev2, emid, n_edges, v1, v2, m12)
+            call find_edge(ev1, ev2, emid, n_edges, v2, v3, m23)
+            call find_edge(ev1, ev2, emid, n_edges, v3, v1, m31)
+            iout = iout+1;  faces_out(:,iout) = [v1,  m12, m31]
+            iout = iout+1;  faces_out(:,iout) = [m12, v2,  m23]
+            iout = iout+1;  faces_out(:,iout) = [m31, m23, v3 ]
+            iout = iout+1;  faces_out(:,iout) = [m12, m23, m31]
+        end do
+
+        deallocate(ev1, ev2, emid)
+
+    end subroutine subdivide_mesh
+
+    ! ── Private helpers ──────────────────────────────────────────────────────
+
+    subroutine add_edge(ev1, ev2, emid, n, nv_base, a, b)
+        integer, intent(inout) :: ev1(:), ev2(:), emid(:), n
+        integer, intent(in)    :: nv_base, a, b
+        integer :: lo, hi, e
+        lo = min(a,b);  hi = max(a,b)
+        do e = 1, n
+            if (ev1(e)==lo .and. ev2(e)==hi) return
+        end do
+        n = n + 1
+        ev1(n) = lo;  ev2(n) = hi;  emid(n) = nv_base + n
+    end subroutine add_edge
+
+    subroutine find_edge(ev1, ev2, emid, n, a, b, mid_idx)
+        integer, intent(in)  :: ev1(:), ev2(:), emid(:), n, a, b
+        integer, intent(out) :: mid_idx
+        integer :: lo, hi, e
+        lo = min(a,b);  hi = max(a,b)
+        do e = 1, n
+            if (ev1(e)==lo .and. ev2(e)==hi) then
+                mid_idx = emid(e);  return
+            end if
+        end do
+        mid_idx = -1   ! unreachable if mesh is consistent
+    end subroutine find_edge
+
 end module geometry

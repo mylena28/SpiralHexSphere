@@ -7,8 +7,9 @@ program main
 
     integer  :: total_nv, total_nf, nv_spiral
     integer  :: total_rings, pts_per_ring
-    real(dp), allocatable :: verts(:,:)
-    integer,  allocatable :: faces(:,:)
+    integer  :: lev, nv_new, nf_new, nv_sp_new
+    real(dp), allocatable :: verts(:,:), verts_new(:,:)
+    integer,  allocatable :: faces(:,:), faces_new(:,:)
 
     ! Equilateral-triangle condition: arc length per ring ≈ arc length per side
     ! 2*PI*helix_R*n_turns / n_s  =  2*PI*tube_r / num_sides
@@ -32,9 +33,22 @@ program main
     write(*,'(A,A)')    '  Cap method         : ', 'Level-0 triangulated (3 interior pts)'
     write(*,'(A,I4)')   '  Cap new verts/cap  : ', 3
     write(*,'(A,I4)')   '  Cap faces/cap      : ', 10
+    write(*,'(A,I4)')   '  Refinement level   : ', refine_level
     write(*,'(A)') '------------------------------------------------------'
 
     call generate_full_mesh(total_nv, total_nf, nv_spiral, verts, faces)
+
+    ! Apply 4-1 midpoint subdivision refine_level times
+    do lev = 1, refine_level
+        write(*,'(A,I2,A)') '  Subdividing level ', lev, ' ...'
+        call subdivide_mesh(total_nv, total_nf, nv_spiral, verts, faces, &
+                            nv_new, nf_new, nv_sp_new, verts_new, faces_new)
+        call move_alloc(verts_new, verts)
+        call move_alloc(faces_new, faces)
+        total_nv  = nv_new
+        total_nf  = nf_new
+        nv_spiral = nv_sp_new
+    end do
 
     write(*,'(A,I8)') '  Total vertices     : ', total_nv
     write(*,'(A,I8)') '  Total faces        : ', total_nf
