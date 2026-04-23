@@ -1,18 +1,6 @@
 # SpiralHexSphere
 
-A Fortran 90 mesh generator for a helical tubular surface capped with two hemispherical ends. The geometry follows the Zinchenko 1997 construction and produces a triangulated surface mesh forming a spiral with caps at the end.
-
----
-
-## Overview
-
-The code builds a closed triangular surface mesh in three parts:
-
-1. **Spiral tube** — a helical tube swept along a 3D helix centerline using the Frenet-Serret frame. The cross-section polygon is swept and subdivided using a Zinchenko Level-1 refinement, producing a fine hexagonal/triangular tiling.
-2. **Start hemisphere cap** — a hemispherical endcap closing the first end of the tube.
-3. **End hemisphere cap** — a hemispherical endcap closing the second end.
-
-The result is a watertight, consistently-oriented surface mesh written to a plain-text `.dat` file.
+Fortran 90 mesh generator for a helical tube capped with two hemispherical ends, producing a watertight triangulated surface mesh.
 
 ---
 
@@ -20,135 +8,78 @@ The result is a watertight, consistently-oriented surface mesh written to a plai
 
 ```
 SpiralHexSphere/
-├── main.f90          # Entry point; orchestrates mesh generation and output
-├── params.f90        # Global parameters module (geometry and mesh settings)
-├── geometry.f90      # Core algorithms: Frenet-Serret frame, vertex generation, triangulation
-├── io.f90            # Output routines; writes vertex/face data to file
-├── plot_mesh.py      # Python visualization script (matplotlib 3D)
-└── Makefile          # Build, run, and plot targets
+├── params.f90        # Global parameters (geometry and refinement settings)
+├── geometry.f90      # Mesh generation: Frenet frame, subdivision, projection
+├── main.f90          # Entry point: orchestrates generation and output
+├── io.f90            # Writes mesh to .dat file
+├── plot_mesh.py      # Python visualization (matplotlib)
+└── Makefile
 ```
 
 ---
 
-## Requirements
+## Quick Start
 
-### Fortran (mesh generation)
-- `gfortran` (GCC Fortran compiler, version 7 or later)
-
-### Python (visualization, optional)
-- Python 3.x
-- NumPy
-- Matplotlib
-
----
-
-## Building and Running
-
-### Compile
 ```bash
-make
-```
-
-### Generate the mesh
-```bash
-make run
-# or directly:
-./spiral_hex_sphere
-```
-
-This writes the mesh to `spiral_hex_sphere.dat`.
-
-### Visualize the mesh
-```bash
-make plot
-# or directly:
-python3 plot_mesh.py
-```
-
-Spiral vertices are shown in blue; hemisphere cap vertices in red.
-
-### Compile, run, and plot in one step
-```bash
-make all_run
-```
-
-### Clean build artifacts
-```bash
+make            # compile
+make run        # generate mesh  →  spiral_hex_sphere.dat
+make plot       # visualize with Python
+make all_run    # compile + run + plot in one step
 make clean
 ```
 
 ---
 
-## Configuration
+## Parameters (`params.f90`)
 
-All parameters are set in `params.f90`. Recompile after any changes.
+All parameters require recompilation after changes.
 
-| Parameter  | Default | Description |
-|------------|---------|-------------|
-| `helix_R`  | `1.0`   | Major radius of the helix (distance from the helix axis) |
-| `helix_h`  | `6.0`   | Total axial height of the helix |
-| `n_turns`  | `4.0`   | Number of full 360° turns |
-| `tube_r`   | `0.3`   | Cross-sectional radius of the tube |
-| `num_sides`| `3`     | Number of polygon sides per cross-section ring (3 → hexagonal tiling after subdivision) |
-| `n_s`      | `144`   | Number of axial sections along the helix (controls spiral resolution) |
-| `n_hemi`   | `6`     | Number of latitude rings per hemisphere cap |
-| `outfile`  | `'spiral_hex_sphere.dat'` | Output filename |
+| Parameter       | Default | Description |
+|-----------------|---------|-------------|
+| `helix_R`       | `1.0`   | Helix radius (distance from axis to centerline) |
+| `helix_h`       | `6.0`   | Total axial height |
+| `n_turns`       | `4.0`   | Number of full turns |
+| `tube_r`        | `0.3`   | Tube cross-section radius |
+| `num_sides`     | `6`     | Vertices per cross-section ring |
+| `refine_level`  | `1`     | Subdivision levels (each level splits every triangle into 4) |
+| `outfile`       | `'spiral_hex_sphere.dat'` | Output filename |
 
-### Derived mesh sizes (default parameters)
-
-| Quantity | Value |
-|----------|-------|
-| Rings along spiral | 287 |
-| Vertices per ring | 6 |
-| Spiral vertices | 1,722 |
-| Total vertices | ~2,500 |
-| Total triangular faces | ~5,000 |
+`n_s` (number of axial rings) is computed at runtime from the equilateral-triangle condition:
+```
+n_s = round(helix_R * n_turns * num_sides / tube_r)
+```
 
 ---
 
 ## Output File Format
 
-The file `spiral_hex_sphere.dat` uses the following plain-text layout:
-
 ```
-nv  nf  nv_spiral
+nv  nf  nv_spiral  pts_per_ring
 x1  y1  z1
-x2  y2  z2
-...                   ← nv vertex lines (double precision)
+...                              ← nv vertex coordinates (double precision)
 i1  j1  k1
-i2  j2  k2
-...                   ← nf face lines (1-based triangle indices)
+...                              ← nf triangle faces (1-based indices)
 ```
 
-- `nv` — total number of vertices
-- `nf` — total number of triangular faces
-- `nv_spiral` — number of vertices belonging to the spiral portion (the remaining vertices are the two hemisphere caps)
-- Face indices follow Fortran 1-based convention and are ordered for outward-pointing normals
+- `nv_spiral` — number of tube-body vertices (remaining vertices belong to the two caps)
+- Face indices give outward-pointing normals
 
 ---
 
 ## Algorithms
 
-### Frenet-Serret Frame
-At each axial position along the helix, the code computes a local orthonormal frame:
-- **T** — unit tangent to the centerline
-- **N** — principal normal (points toward the helix axis)
-- **B = T × N** — binormal
-
-Tube vertices are then placed at:
+### Frenet-Serret frame
+At each axial station along the helix, a local orthonormal frame **{T, N, B}** is computed. Ring vertices are placed at:
 ```
-v = P + tube_r * (N * cos(θ) + B * sin(θ))
+v = P + tube_r * (N·cos θ + B·sin θ)
 ```
-where `θ` varies uniformly around the cross-section.
 
-### Zinchenko Level-1 Subdivision
-Each 2×2 block of neighboring rings is subdivided into 8 triangles by inserting edge midpoints. This produces the characteristic hexagonal/triangular tiling associated with the Zinchenko mesh construction.
+### 4-1 midpoint subdivision
+Each triangle is split into 4 children by inserting the midpoint of every edge. After subdivision, every new midpoint is **projected back onto the exact surface**:
+- *Tube edges* — the chord midpoint is projected onto the tube's circular cross-section at the interpolated arc parameter, by removing the tangential component and renormalising in the N-B plane.
+- *Cap edges* — the chord midpoint is projected onto the hemisphere sphere of radius `tube_r`.
 
-### Hemisphere Caps
-Each cap is built as a series of latitude rings whose radius shrinks from `tube_r` at the equator to zero at the pole. Rings are triangulated by connecting adjacent latitude rings with two triangles per quad. A fan of triangles closes the pole.
+This keeps cross-sections exactly circular and caps exactly spherical at every refinement level.
 
----
-
-## License
-
-Please contact the author before reuse or redistribution.
+### Hemisphere caps
+Each cap uses 3 interior vertices placed at an optimal elevation (`sin φ = (√7 − 1)/3`) to minimise edge-length variation, giving 10 triangles per cap. These interior points lie on the hemisphere sphere and are projected correctly during subdivision.

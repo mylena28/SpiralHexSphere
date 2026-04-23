@@ -340,6 +340,64 @@ contains
 
     end subroutine subdivide_mesh
 
+    ! ════════════════════════════════════════════════════════════════════════
+    ! CHECK_PROJECTION_ERROR
+    !
+    ! For every vertex, computes the distance from the vertex to its target
+    ! surface and returns the maximum |distance - tube_r|:
+    !   cap_flag =  0  →  NB-plane radius at s_frac should equal tube_r
+    !   cap_flag = -1  →  3-D distance to vec_P_first should equal tube_r
+    !   cap_flag = +1  →  3-D distance to vec_P_last  should equal tube_r
+    ! ════════════════════════════════════════════════════════════════════════
+    subroutine check_projection_error(nv, verts, s_frac, cap_flag, max_err, max_idx)
+        integer,  intent(in)  :: nv
+        real(dp), intent(in)  :: verts(3, nv)
+        real(dp), intent(in)  :: s_frac(nv)
+        integer,  intent(in)  :: cap_flag(nv)
+        real(dp), intent(out) :: max_err
+        integer,  intent(out) :: max_idx
+
+        integer  :: i
+        real(dp) :: err, t_param, d_vec(3), d_dot
+        real(dp) :: vec_P(3), vec_T(3), vec_P_first(3), vec_P_last(3)
+        real(dp) :: omega, norm_v
+
+        omega  = 2.0_dp * PI * n_turns / helix_h
+        norm_v = sqrt((helix_R * omega)**2 + 1.0_dp)
+        vec_P_first = [helix_R, 0.0_dp, 0.0_dp]
+        vec_P_last  = [helix_R*cos(2.0_dp*PI*n_turns), &
+                       helix_R*sin(2.0_dp*PI*n_turns), helix_h]
+
+        max_err = 0.0_dp
+        max_idx = 0
+
+        do i = 1, nv
+            select case (cap_flag(i))
+            case (-1)
+                d_vec = verts(:,i) - vec_P_first
+                err   = abs(sqrt(d_vec(1)**2 + d_vec(2)**2 + d_vec(3)**2) - tube_r)
+            case (1)
+                d_vec = verts(:,i) - vec_P_last
+                err   = abs(sqrt(d_vec(1)**2 + d_vec(2)**2 + d_vec(3)**2) - tube_r)
+            case default
+                t_param  = 2.0_dp * PI * n_turns * s_frac(i)
+                vec_P    = [helix_R*cos(t_param), helix_R*sin(t_param), helix_h*s_frac(i)]
+                vec_T(1) = -helix_R * omega * sin(t_param) / norm_v
+                vec_T(2) =  helix_R * omega * cos(t_param) / norm_v
+                vec_T(3) =  1.0_dp / norm_v
+                d_vec    = verts(:,i) - vec_P
+                d_dot    = d_vec(1)*vec_T(1) + d_vec(2)*vec_T(2) + d_vec(3)*vec_T(3)
+                err = abs(sqrt(max(0.0_dp, &
+                    d_vec(1)**2+d_vec(2)**2+d_vec(3)**2 - d_dot**2)) - tube_r)
+            end select
+            if (err > max_err) then
+                max_err = err
+                max_idx = i
+            end if
+        end do
+
+    end subroutine check_projection_error
+
     ! ── Private helpers ──────────────────────────────────────────────────────
 
     subroutine add_edge(ev1, ev2, emid, n, nv_base, a, b)

@@ -8,6 +8,8 @@ program main
     integer  :: total_nv, total_nf, nv_spiral
     integer  :: total_rings, pts_per_ring
     integer  :: lev, nv_new, nf_new, nv_sp_new
+    !real(dp) :: proj_err
+    !integer  :: proj_idx
     real(dp), allocatable :: verts(:,:), verts_new(:,:)
     integer,  allocatable :: faces(:,:), faces_new(:,:)
     real(dp), allocatable :: s_frac(:), s_frac_new(:)
@@ -39,6 +41,8 @@ program main
     write(*,'(A)') '------------------------------------------------------'
 
     call generate_full_mesh(total_nv, total_nf, nv_spiral, verts, faces, s_frac, cap_flag)
+    !call check_projection_error(total_nv, verts, s_frac, cap_flag, proj_err, proj_idx)
+    !write(*,'(A,ES10.3,A,I0,A)') '  Projection error L0: ', proj_err, '  (vertex ', proj_idx, ')'
 
     ! Apply 4-1 midpoint subdivision refine_level times
     do lev = 1, refine_level
@@ -54,8 +58,11 @@ program main
         total_nv  = nv_new
         total_nf  = nf_new
         nv_spiral = nv_sp_new
+        !call check_projection_error(total_nv, verts, s_frac, cap_flag, proj_err, proj_idx)
+        !write(*,'(A,I2,A,ES10.3,A,I0,A)') &
+        !    '  Projection error L', lev, ': ', proj_err, '  (vertex ', proj_idx, ')'
     end do
-
+    write(*,'(A,I8)') '------------------------------------------------------'
     write(*,'(A,I8)') '  Total vertices     : ', total_nv
     write(*,'(A,I8)') '  Total faces        : ', total_nf
     write(*,'(A,I8)') '  Spiral vertices    : ', nv_spiral
