@@ -162,30 +162,30 @@ contains
         !   center : [Q1,Q2,Q3]
         ! ════════════════════════════════════════════════════════════════════
 
-        ! ── START CAP ──
-        iface = iface + 1;  faces(:, iface) = [6,   1,   cs1]
-        iface = iface + 1;  faces(:, iface) = [1,   2,   cs1]
-        iface = iface + 1;  faces(:, iface) = [2,   3,   cs2]
-        iface = iface + 1;  faces(:, iface) = [3,   4,   cs2]
-        iface = iface + 1;  faces(:, iface) = [4,   5,   cs3]
-        iface = iface + 1;  faces(:, iface) = [5,   6,   cs3]
-        iface = iface + 1;  faces(:, iface) = [2,   cs2, cs1]
-        iface = iface + 1;  faces(:, iface) = [4,   cs3, cs2]
-        iface = iface + 1;  faces(:, iface) = [6,   cs1, cs3]
-        iface = iface + 1;  faces(:, iface) = [cs1, cs2, cs3]
+        ! ── START CAP — normals outward (toward -T_first) ──
+        iface = iface + 1;  faces(:, iface) = [6,   cs1, 1  ]
+        iface = iface + 1;  faces(:, iface) = [1,   cs1, 2  ]
+        iface = iface + 1;  faces(:, iface) = [2,   cs2, 3  ]
+        iface = iface + 1;  faces(:, iface) = [3,   cs2, 4  ]
+        iface = iface + 1;  faces(:, iface) = [4,   cs3, 5  ]
+        iface = iface + 1;  faces(:, iface) = [5,   cs3, 6  ]
+        iface = iface + 1;  faces(:, iface) = [2,   cs1, cs2]
+        iface = iface + 1;  faces(:, iface) = [4,   cs2, cs3]
+        iface = iface + 1;  faces(:, iface) = [6,   cs3, cs1]
+        iface = iface + 1;  faces(:, iface) = [cs1, cs3, cs2]
 
-        ! ── END CAP  (same pattern, reversed vertex order for outward +T normal) ──
+        ! ── END CAP — normals outward (toward +T_last) ──
         Sb = (total_rings - 1) * num_sides   ! offset of last ring
-        iface = iface + 1;  faces(:, iface) = [ce1, Sb+1, Sb+6]
-        iface = iface + 1;  faces(:, iface) = [ce1, Sb+2, Sb+1]
-        iface = iface + 1;  faces(:, iface) = [ce2, Sb+3, Sb+2]
-        iface = iface + 1;  faces(:, iface) = [ce2, Sb+4, Sb+3]
-        iface = iface + 1;  faces(:, iface) = [ce3, Sb+5, Sb+4]
-        iface = iface + 1;  faces(:, iface) = [ce3, Sb+6, Sb+5]
-        iface = iface + 1;  faces(:, iface) = [ce1, ce2,  Sb+2]
-        iface = iface + 1;  faces(:, iface) = [ce2, ce3,  Sb+4]
-        iface = iface + 1;  faces(:, iface) = [ce3, ce1,  Sb+6]
-        iface = iface + 1;  faces(:, iface) = [ce3, ce2,  ce1 ]
+        iface = iface + 1;  faces(:, iface) = [ce1, Sb+6, Sb+1]
+        iface = iface + 1;  faces(:, iface) = [ce1, Sb+1, Sb+2]
+        iface = iface + 1;  faces(:, iface) = [ce2, Sb+2, Sb+3]
+        iface = iface + 1;  faces(:, iface) = [ce2, Sb+3, Sb+4]
+        iface = iface + 1;  faces(:, iface) = [ce3, Sb+4, Sb+5]
+        iface = iface + 1;  faces(:, iface) = [ce3, Sb+5, Sb+6]
+        iface = iface + 1;  faces(:, iface) = [ce1, Sb+2, ce2 ]
+        iface = iface + 1;  faces(:, iface) = [ce2, Sb+4, ce3 ]
+        iface = iface + 1;  faces(:, iface) = [ce3, Sb+6, ce1 ]
+        iface = iface + 1;  faces(:, iface) = [ce3, ce1,  ce2 ]
 
     end subroutine generate_full_mesh
 
@@ -339,6 +339,44 @@ contains
         deallocate(ev1, ev2, emid)
 
     end subroutine subdivide_mesh
+
+    ! ════════════════════════════════════════════════════════════════════════
+    ! COMPUTE_VERTEX_NORMALS
+    !
+    ! Area-weighted vertex normals: for each triangle, accumulate the face
+    ! normal (cross product of two edges, magnitude = 2*area) at its three
+    ! vertices, then normalise.  Outward orientation follows the winding
+    ! order of the faces as built by generate_full_mesh.
+    ! ════════════════════════════════════════════════════════════════════════
+    subroutine compute_vertex_normals(nv, nf, verts, faces, normals)
+        integer,  intent(in)  :: nv, nf
+        real(dp), intent(in)  :: verts(3, nv)
+        integer,  intent(in)  :: faces(3, nf)
+        real(dp), intent(out) :: normals(3, nv)
+
+        integer  :: f, v, v1, v2, v3
+        real(dp) :: e1(3), e2(3), fn(3), d
+
+        normals = 0.0_dp
+
+        do f = 1, nf
+            v1 = faces(1,f);  v2 = faces(2,f);  v3 = faces(3,f)
+            e1 = verts(:,v2) - verts(:,v1)
+            e2 = verts(:,v3) - verts(:,v1)
+            fn(1) = e1(2)*e2(3) - e1(3)*e2(2)
+            fn(2) = e1(3)*e2(1) - e1(1)*e2(3)
+            fn(3) = e1(1)*e2(2) - e1(2)*e2(1)
+            normals(:,v1) = normals(:,v1) + fn
+            normals(:,v2) = normals(:,v2) + fn
+            normals(:,v3) = normals(:,v3) + fn
+        end do
+
+        do v = 1, nv
+            d = sqrt(normals(1,v)**2 + normals(2,v)**2 + normals(3,v)**2)
+            if (d > 0.0_dp) normals(:,v) = normals(:,v) / d
+        end do
+
+    end subroutine compute_vertex_normals
 
     ! ════════════════════════════════════════════════════════════════════════
     ! CHECK_PROJECTION_ERROR

@@ -1,7 +1,7 @@
 FC     = gfortran
 FFLAGS = -Wall -Wextra -O2
-TARGET = spiral_hex_sphere
-DATA   = spiral_hex_sphere.dat
+TARGET = spiral
+DATA   = spiral.dat
 
 OBJS = params.o geometry.o io.o main.o
 

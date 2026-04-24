@@ -15,11 +15,13 @@ contains
     ! This format is identical to what Spiral/io.f90 and Sphere/write_mesh.f
     ! produce, so plot_mesh.py can read it directly.
     ! ──────────────────────────────────────────────────────────────────────────
-    subroutine write_mesh(filename, total_nv, total_nf, nv_spiral, pts_per_ring, verts, faces)
+    subroutine write_mesh(filename, total_nv, total_nf, nv_spiral, pts_per_ring, &
+                          verts, faces, normals)
         character(len=*), intent(in) :: filename
         integer,  intent(in) :: total_nv, total_nf, nv_spiral, pts_per_ring
         real(dp), intent(in) :: verts(3, total_nv)
         integer,  intent(in) :: faces(3, total_nf)
+        real(dp), intent(in) :: normals(3, total_nv)
 
         integer :: iunit, i
 
@@ -28,12 +30,16 @@ contains
         ! Header: vertex count, face count, spiral vertex count, pts per ring
         write(iunit, '(4(I10,1X))') total_nv, total_nf, nv_spiral, pts_per_ring
 
-        ! Vertices
+        ! Vertices: x  y  z  nx  ny  nz
+        write(iunit, '(A)') 'v'
         do i = 1, total_nv
-            write(iunit, '(3(F14.8,1X))') verts(1,i), verts(2,i), verts(3,i)
+            write(iunit, '(6(ES18.9,1X))') &
+                verts(1,i),   verts(2,i),   verts(3,i), &
+                normals(1,i), normals(2,i), normals(3,i)
         end do
 
         ! Faces (1-based indices)
+        write(iunit, '(A)') 'f'
         do i = 1, total_nf
             write(iunit, '(3(I10,1X))') faces(1,i), faces(2,i), faces(3,i)
         end do

@@ -14,6 +14,7 @@ program main
     integer,  allocatable :: faces(:,:), faces_new(:,:)
     real(dp), allocatable :: s_frac(:), s_frac_new(:)
     integer,  allocatable :: cap_flag(:), cap_flag_new(:)
+    real(dp), allocatable :: normals(:,:)
 
     ! Equilateral-triangle condition: arc length per ring ≈ arc length per side
     ! 2*PI*helix_R*n_turns / n_s  =  2*PI*tube_r / num_sides
@@ -67,9 +68,12 @@ program main
     write(*,'(A,I8)') '  Total faces        : ', total_nf
     write(*,'(A,I8)') '  Spiral vertices    : ', nv_spiral
 
-    call write_mesh(trim(outfile), total_nv, total_nf, nv_spiral, pts_per_ring, verts, faces)
+    allocate(normals(3, total_nv))
+    call compute_vertex_normals(total_nv, total_nf, verts, faces, normals)
+    call write_mesh(trim(outfile), total_nv, total_nf, nv_spiral, pts_per_ring, &
+                    verts, faces, normals)
 
-    deallocate(verts, faces, s_frac, cap_flag)
+    deallocate(verts, faces, s_frac, cap_flag, normals)
     write(*,'(A)') '======================================================'
     write(*,'(A)') '  Done.'
 
