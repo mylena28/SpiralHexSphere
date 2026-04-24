@@ -55,8 +55,8 @@ n_s = round(helix_R * n_turns * num_sides / tube_r)
 
 ```
 nv  nf  nv_spiral  pts_per_ring
-x1  y1  z1
-...                              ← nv vertex coordinates (double precision)
+x1  y1  z1 n1 n2 n3
+...                              ← nv vertex coordinates and normal vector (double precision)
 i1  j1  k1
 ...                              ← nf triangle faces (1-based indices)
 ```
