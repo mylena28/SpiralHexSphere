@@ -1,7 +1,7 @@
 FC     = gfortran
 FFLAGS = -Wall -Wextra -O2
 TARGET = spiral
-DATA   = spiral.dat
+DATA   = spiral.obj
 
 OBJS = params.o geometry.o io.o main.o
 

@@ -35,14 +35,8 @@ contains
         total_rings  = n_s
         pts_per_ring = num_sides
 
-        nv_spiral = total_rings * pts_per_ring
+        nv_spiral = total_rings * pts_per_ring !used to conect
         nf_spiral = (n_s - 1) * num_sides * 2
-
-        ! Cap: 3 interior pts + 0 pole (works for num_sides = 6)
-        !   outer triangles : num_sides      = 6
-        !   bridge triangles: num_sides/2    = 3
-        !   center triangle :               = 1
-        !   total per cap                   = 10
         nv_hemi = 3
         nf_hemi = 10
 
@@ -62,9 +56,7 @@ contains
         omega  = 2.0_dp * PI * n_turns / helix_h
         norm_v = sqrt((helix_R * omega)**2 + 1.0_dp)
 
-        ! ════════════════════════════════════════════════════════════════════
-        ! PART 1 — SPIRAL VERTICES
-        ! ════════════════════════════════════════════════════════════════════
+        ! PART 1 - SPIRAL VERTICES
         do i = 1, total_rings
             s_param = real(i - 1, dp) / real(total_rings - 1, dp)
             t_param = 2.0_dp * PI * n_turns * s_param
@@ -99,9 +91,7 @@ contains
             end if
         end do
 
-        ! ════════════════════════════════════════════════════════════════════
-        ! PART 2 — CAP INTERIOR VERTICES (Optimized Spherical Projection)
-        ! ════════════════════════════════════════════════════════════════════
+        ! PART 2 - CAP INTERIOR VERTICES (Optimized Spherical Projection)
 
         ! --- START CAP (Elevated toward -T_first) ---
         cs1 = nv_spiral + 1
@@ -135,9 +125,7 @@ contains
             cap_flag(idx)    = 1
         end do
 
-        ! ════════════════════════════════════════════════════════════════════
-        ! PART 3 — SPIRAL FACES  (quad → 2 triangles per column)
-        ! ════════════════════════════════════════════════════════════════════
+
         iface = 0
         do i = 1, total_rings - 1
             do j = 1, pts_per_ring
@@ -150,19 +138,7 @@ contains
             end do
         end do
 
-        ! ════════════════════════════════════════════════════════════════════
-        ! PART 4 — CAP FACES  (10 triangles each, for num_sides = 6)
-        !
-        ! Start cap ring  : R1..R6  (vertices 1..6  of ring 1)
-        !   Q1 = cs1 (azimuths of R1), Q2 = cs2 (R3), Q3 = cs3 (R5)
-        !
-        ! Connectivity (CCW from outside, i.e., from  -T direction):
-        !   outer  : [R6,R1,Q1] [R1,R2,Q1] [R2,R3,Q2] [R3,R4,Q2] [R4,R5,Q3] [R5,R6,Q3]
-        !   bridge : [R2,Q2,Q1] [R4,Q3,Q2] [R6,Q1,Q3]
-        !   center : [Q1,Q2,Q3]
-        ! ════════════════════════════════════════════════════════════════════
-
-        ! ── START CAP — normals outward (toward -T_first) ──
+        !  FIRST CAP - normals outward (toward -T_first)
         iface = iface + 1;  faces(:, iface) = [6,   cs1, 1  ]
         iface = iface + 1;  faces(:, iface) = [1,   cs1, 2  ]
         iface = iface + 1;  faces(:, iface) = [2,   cs2, 3  ]
@@ -174,7 +150,7 @@ contains
         iface = iface + 1;  faces(:, iface) = [6,   cs3, cs1]
         iface = iface + 1;  faces(:, iface) = [cs1, cs3, cs2]
 
-        ! ── END CAP — normals outward (toward +T_last) ──
+        !  SECOND CAP - normals outward (toward +T_last)
         Sb = (total_rings - 1) * num_sides   ! offset of last ring
         iface = iface + 1;  faces(:, iface) = [ce1, Sb+6, Sb+1]
         iface = iface + 1;  faces(:, iface) = [ce1, Sb+1, Sb+2]
@@ -189,20 +165,6 @@ contains
 
     end subroutine generate_full_mesh
 
-    ! ════════════════════════════════════════════════════════════════════════
-    ! SUBDIVIDE_MESH — 4-1 midpoint subdivision (one level)
-    !
-    ! Each triangle is split into 4 by inserting the midpoint of every edge:
-    !
-    !        v1                v1
-    !       /  \              / \
-    !      /    \    →    m31 --- m12
-    !     /      \          / \ / \
-    !    v3------v2        v3-m23--v2
-    !
-    ! Intra-spiral edges are inserted first so new spiral midpoints keep
-    ! consecutive indices, preserving the nv_spiral boundary for plot_mesh.py.
-    ! ════════════════════════════════════════════════════════════════════════
     subroutine subdivide_mesh(nv_in, nf_in, nv_sp_in, verts_in, faces_in, &
                               s_frac_in, cap_flag_in, &
                               nv_out, nf_out, nv_sp_out, verts_out, faces_out, &
@@ -340,14 +302,6 @@ contains
 
     end subroutine subdivide_mesh
 
-    ! ════════════════════════════════════════════════════════════════════════
-    ! COMPUTE_VERTEX_NORMALS
-    !
-    ! Area-weighted vertex normals: for each triangle, accumulate the face
-    ! normal (cross product of two edges, magnitude = 2*area) at its three
-    ! vertices, then normalise.  Outward orientation follows the winding
-    ! order of the faces as built by generate_full_mesh.
-    ! ════════════════════════════════════════════════════════════════════════
     subroutine compute_vertex_normals(nv, nf, verts, faces, normals)
         integer,  intent(in)  :: nv, nf
         real(dp), intent(in)  :: verts(3, nv)
@@ -378,65 +332,7 @@ contains
 
     end subroutine compute_vertex_normals
 
-    ! ════════════════════════════════════════════════════════════════════════
-    ! CHECK_PROJECTION_ERROR
-    !
-    ! For every vertex, computes the distance from the vertex to its target
-    ! surface and returns the maximum |distance - tube_r|:
-    !   cap_flag =  0  →  NB-plane radius at s_frac should equal tube_r
-    !   cap_flag = -1  →  3-D distance to vec_P_first should equal tube_r
-    !   cap_flag = +1  →  3-D distance to vec_P_last  should equal tube_r
-    ! ════════════════════════════════════════════════════════════════════════
-    subroutine check_projection_error(nv, verts, s_frac, cap_flag, max_err, max_idx)
-        integer,  intent(in)  :: nv
-        real(dp), intent(in)  :: verts(3, nv)
-        real(dp), intent(in)  :: s_frac(nv)
-        integer,  intent(in)  :: cap_flag(nv)
-        real(dp), intent(out) :: max_err
-        integer,  intent(out) :: max_idx
-
-        integer  :: i
-        real(dp) :: err, t_param, d_vec(3), d_dot
-        real(dp) :: vec_P(3), vec_T(3), vec_P_first(3), vec_P_last(3)
-        real(dp) :: omega, norm_v
-
-        omega  = 2.0_dp * PI * n_turns / helix_h
-        norm_v = sqrt((helix_R * omega)**2 + 1.0_dp)
-        vec_P_first = [helix_R, 0.0_dp, 0.0_dp]
-        vec_P_last  = [helix_R*cos(2.0_dp*PI*n_turns), &
-                       helix_R*sin(2.0_dp*PI*n_turns), helix_h]
-
-        max_err = 0.0_dp
-        max_idx = 0
-
-        do i = 1, nv
-            select case (cap_flag(i))
-            case (-1)
-                d_vec = verts(:,i) - vec_P_first
-                err   = abs(sqrt(d_vec(1)**2 + d_vec(2)**2 + d_vec(3)**2) - tube_r)
-            case (1)
-                d_vec = verts(:,i) - vec_P_last
-                err   = abs(sqrt(d_vec(1)**2 + d_vec(2)**2 + d_vec(3)**2) - tube_r)
-            case default
-                t_param  = 2.0_dp * PI * n_turns * s_frac(i)
-                vec_P    = [helix_R*cos(t_param), helix_R*sin(t_param), helix_h*s_frac(i)]
-                vec_T(1) = -helix_R * omega * sin(t_param) / norm_v
-                vec_T(2) =  helix_R * omega * cos(t_param) / norm_v
-                vec_T(3) =  1.0_dp / norm_v
-                d_vec    = verts(:,i) - vec_P
-                d_dot    = d_vec(1)*vec_T(1) + d_vec(2)*vec_T(2) + d_vec(3)*vec_T(3)
-                err = abs(sqrt(max(0.0_dp, &
-                    d_vec(1)**2+d_vec(2)**2+d_vec(3)**2 - d_dot**2)) - tube_r)
-            end select
-            if (err > max_err) then
-                max_err = err
-                max_idx = i
-            end if
-        end do
-
-    end subroutine check_projection_error
-
-    ! ── Private helpers ──────────────────────────────────────────────────────
+    !  Private helpers
 
     subroutine add_edge(ev1, ev2, emid, n, nv_base, a, b)
         integer, intent(inout) :: ev1(:), ev2(:), emid(:), n
