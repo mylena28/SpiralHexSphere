@@ -11,7 +11,7 @@ SpiralHexSphere/
 ├── params.f90        # Global parameters (geometry and refinement settings)
 ├── geometry.f90      # Mesh generation: Frenet frame, subdivision, projection
 ├── main.f90          # Entry point: orchestrates generation and output
-├── io.f90            # Writes mesh to .dat file
+├── io.f90            # Writes mesh to .obj file
 ├── plot_mesh.py      # Python visualization (matplotlib)
 └── Makefile
 ```
@@ -22,7 +22,7 @@ SpiralHexSphere/
 
 ```bash
 make            # compile
-make run        # generate mesh  →  spiral.git
+make run        # generate mesh  →  spiral.obj
 make plot       # visualize with Python
 make all_run    # compile + run + plot in one step
 make clean
@@ -42,7 +42,7 @@ All parameters require recompilation after changes.
 | `tube_r`        | `0.3`   | Tube cross-section radius |
 | `num_sides`     | `6`     | Vertices per cross-section ring |
 | `refine_level`  | `1`     | Subdivision levels (each level splits every triangle into 4) |
-| `outfile`       | `'spiral_hex_sphere.dat'` | Output filename |
+| `outfile`       | `'spiral_hex_sphere.obj'` | Output filename |
 
 `n_s` (number of axial rings) is computed at runtime from the equilateral-triangle condition:
 ```
