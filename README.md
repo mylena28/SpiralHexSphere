@@ -22,7 +22,7 @@ SpiralHexSphere/
 
 ```bash
 make            # compile
-make run        # generate mesh  →  spiral_hex_sphere.dat
+make run        # generate mesh  →  spiral.git
 make plot       # visualize with Python
 make all_run    # compile + run + plot in one step
 make clean
